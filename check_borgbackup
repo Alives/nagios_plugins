@@ -4,7 +4,7 @@ critical=72
 
 currentDate=$(date "+%s")
 
-while getopts "d:w:c:" optionName; do
+while getopts "s:w:c:" optionName; do
   case "$optionName" in
     s) statusfile="$OPTARG";;
     w) warning=$OPTARG;;
