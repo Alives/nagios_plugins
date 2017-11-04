@@ -2,19 +2,20 @@
 
 while getopts "s:n:i:w:c:" opts; do
   case "${opts}" in
-    s) sensor=("${OPTARG}");;
-    n) name=("${OPTARG}");;
-    i) id=("${OPTARG}");;
-    w) warn=(${OPTARG});;
-    c) crit=(${OPTARG});;
+    s) sensor="${OPTARG}";;
+    n) name="${OPTARG}";;
+    i) id="${OPTARG}";;
+    w) warn="${OPTARG}";;
+    c) crit="${OPTARG}";;
   esac
 done
 
 test "${sensor}x" = "x" && sensor=""
 
-status=$(/usr/bin/sensors -f ${sensor} | /bin/grep "${id}")
-temp=$(printf "%.0f" $(echo ${status} | \
-  /bin/sed -n 's/.*:[ ]\++\([0-9]\+\.[0-9]\+\)°F.*/\1/p'))
+status="$(/usr/bin/sensors -f ${sensor} | /bin/grep "${id}")"
+full_temp="$(echo "${status}" \
+    | /bin/sed -n 's/.*:[ ]\++\([0-9]\+\.[0-9]\+\).F.*/\1/p')"
+temp="$(printf "%.0f" "$full_temp")"
 
 if [ "${temp}" -gt "${crit}" ]; then
   echo "CRITICAL: ${name} temperature: ${temp}°F, above critical threshold of ${crit}°F!"
