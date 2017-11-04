@@ -1,0 +1,39 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import optparse
+import re
+import subprocess
+
+
+parser = optparse.OptionParser()
+parser.add_option('--command', dest='command')
+parser.add_option('--regex', dest='regex')
+parser.add_option('--warn', dest='warn')
+parser.add_option('--crit', dest='crit')
+parser.add_option('--no-conv', '-n', dest='no_conv', action='store_true', default=False)
+(options, _) = parser.parse_args()
+
+(stdout, stderr) = subprocess.Popen(options.command.split(),
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE).communicate()
+result = re.findall(options.regex, stdout)
+temp = float(result[0])
+if not options.no_conv:
+  temp = (1.8 * temp) + 32
+  units = '°F'
+else:
+  units = '°C'
+
+if temp > float(options.crit):
+  prefix = 'CRITICAL:'
+  ret = 2
+elif temp > float(options.warn):
+  prefix = 'WARNING:'
+  ret = 1
+else:
+  prefix = 'OK:'
+  ret = 0
+
+print '%s Temperature: %0.1f%s' % (prefix, temp, units)
+exit(ret)

@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# 0 - all ok
+# 1 - warning
+# 2 - critical
+# 3 - unknown
+
+arpingcmd=$(which arping 2>/dev/null)
+
+if [[ $? != 0 ]]; then
+  echo "arping command not found"
+  exit 3
+fi
+
+if [[ -z $1 ]]; then
+  echo "No address given"
+  exit 3
+fi
+
+hostname=$1
+
+arpingoutput="$(${arpingcmd} -c 1 ${hostname} 2>&1)"
+
+# 0 - packet received
+# 1 - no reply or error
+
+if [[ $? == 1 ]]; then
+  echo "Host down or arping error: ${arpingoutput}" | tr '\n' ' '
+  echo
+  exit 2
+fi
+
+if [[ $? = 0 ]]; then
+  echo "Host up: ${arpingoutput}" | tr '\n' ' '
+  echo
+  exit 0
+fi
