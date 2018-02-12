@@ -1,6 +1,6 @@
 #!/bin/bash
 
-while getopts "s:n:i:w:c:" opts; do
+while getopts "s:n:i:w:c:wl:cl" opts; do
   case "${opts}" in
     s) sensor="${OPTARG}";;
     n) name="${OPTARG}";;
@@ -14,7 +14,11 @@ done
 
 test "${sensor}x" = "x" && sensor=""
 
-status="$(/usr/bin/sensors -f ${sensor} | /bin/grep "${id}")"
+status="$(/usr/bin/sensors -f ${sensor} 2>&1 | /bin/grep -E "${id}|not found")"
+if echo "$status" | /bin/grep -iq "specified sensor(s) not found"; then
+  echo "CRITICAL: ${status}"
+  exit 2
+fi
 full_temp="$(echo "${status}" \
     | /bin/sed -n 's/.*:[ ]\++\([0-9]\+\.[0-9]\+\).F.*/\1/p')"
 temp="$(printf "%.0f" "$full_temp")"
