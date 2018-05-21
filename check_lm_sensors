@@ -7,8 +7,6 @@ while getopts "s:n:i:w:c:wl:cl" opts; do
     i) id="${OPTARG}";;
     w) warn="${OPTARG}";;
     c) crit="${OPTARG}";;
-    wl) warn_low="${OPTARG}";;
-    cl) crit_low="${OPTARG}";;
   esac
 done
 
@@ -29,12 +27,9 @@ if [ "${temp}" -gt "${crit}" ]; then
 elif [ "${temp}" -gt "${warn}" ]; then
   echo "WARNING: ${name} temperature: ${temp}°F, above warning threshold of ${warn}°F!"
   exit 1
-elif [ "${temp}" -lt "${crit_low}" ]; then
-  echo "CRITICAL: ${name} temperature: ${temp}°F, below critical threshold of ${crit}°F!"
+elif [ "${temp}" -lt 10 ]; then
+  echo "CRITICAL: ${name} temperature: ${temp}°F, below critical threshold of 10°F!"
   exit 2
-elif [ "${temp}" -lt "${warn_low}" ]; then
-  echo "WARNING: ${name} temperature: ${temp}°F, below warning threshold of ${warn}°F!"
-  exit 1
 else
   echo "OK: ${name} Temperature: ${temp}°F"
   exit 0
