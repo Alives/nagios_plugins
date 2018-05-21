@@ -63,7 +63,9 @@ if [ $? -eq 0 ]; then
       exit 1
     fi
     HEALTH=$(/usr/bin/sudo /usr/bin/docker -H $HOST inspect --format="{{ .State.Health.Status }}" $CONTAINER 2> /dev/null)
-    if [ "$HEALTH" != "healthy" ]; then
+    if [ -z"$HEALTH" ]; then
+      HEALTH="healthchecks are not implemented"
+    elif [ "$HEALTH" != "healthy" ]; then
       echo "WARNING - Container $CONTAINER is $HEALTH."
       exit 1
     fi
