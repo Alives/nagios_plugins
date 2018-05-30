@@ -14,11 +14,11 @@ function fHelp
 }
 
 function fCountContainers {
-  nbContainers=$(/usr/bin/sudo /usr/bin/docker -H $HOST ps -q | wc -l)
+  nbContainers=$(/usr/bin/docker -H $HOST ps -q | wc -l)
 }
 
 function fCountImages {
-  nbImages=$(/usr/bin/sudo /usr/bin/docker -H $HOST images -q | wc -l)
+  nbImages=$(/usr/bin/docker -H $HOST images -q | wc -l)
 }
 
 #INIT
@@ -46,14 +46,14 @@ else
   HOST=$ARGHOST
 fi
 
-/usr/bin/sudo /usr/bin/docker -H $HOST ps > /dev/null 2>&1
+/usr/bin/docker -H $HOST ps > /dev/null 2>&1
 
 if [ $? -eq 0 ]; then
   fCountContainers
   fCountImages
   if [[ $OPTCONT -ne 0 ]]; then
     CONTAINER=$ARGCONT
-    RUNNING=$(/usr/bin/sudo /usr/bin/docker -H $HOST inspect --format="{{ .State.Running }}" $CONTAINER 2> /dev/null)
+    RUNNING=$(/usr/bin/docker -H $HOST inspect --format="{{ .State.Running }}" $CONTAINER 2> /dev/null)
     if [ $? -eq 1 ]; then
       echo "CRITICAL - Container $CONTAINER does not exist."
       exit 2
@@ -62,21 +62,21 @@ if [ $? -eq 0 ]; then
       echo "WARNING - Container $CONTAINER is not running."
       exit 1
     fi
-    HEALTH=$(/usr/bin/sudo /usr/bin/docker -H $HOST inspect --format="{{ .State.Health.Status }}" $CONTAINER 2> /dev/null)
-    if [ -z"$HEALTH" ]; then
+    HEALTH=$(/usr/bin/docker -H $HOST inspect --format="{{ .State.Health.Status }}" $CONTAINER 2> /dev/null)
+    if [ -z "$HEALTH" ]; then
       HEALTH="healthchecks are not implemented"
     elif [ "$HEALTH" != "healthy" ]; then
       echo "WARNING - Container $CONTAINER is $HEALTH."
       exit 1
     fi
-    STARTED=$(date --date="$(/usr/bin/sudo /usr/bin/docker -H $HOST inspect --format="{{ .State.StartedAt }}" $CONTAINER)")
+    STARTED=$(date --date="$(/usr/bin/docker -H $HOST inspect --format="{{ .State.StartedAt }}" $CONTAINER)")
     started_epoch=$(date --date="$STARTED" +%s)
     now=$(date +%s)
     if [[ "$started_epoch" -gt $((now-60)) ]]; then
       echo "WARNING - Container $CONTAINER just restarted at $(date --date="$STARTED")"
       exit 1
     fi
-    NETWORK=$(/usr/bin/sudo /usr/bin/docker -H $HOST inspect --format="{{ .NetworkSettings.IPAddress }}" $CONTAINER)
+    NETWORK=$(/usr/bin/docker -H $HOST inspect --format="{{ .NetworkSettings.IPAddress }}" $CONTAINER)
     echo "OK - Container $CONTAINER is running and $HEALTH. | IP: $NETWORK, StartedAt: $STARTED"
     exit 0
   fi
