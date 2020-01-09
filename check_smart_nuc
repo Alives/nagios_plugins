@@ -1,0 +1,13 @@
+#!/bin/bash -e
+if grep -q "$1.*/data" /proc/mounts; then
+  flags="-d sat,12"
+else
+  flags=""
+fi
+/usr/bin/sudo /usr/sbin/smartctl -H $1 $flags
+status=$?
+if [[ "${status}" -ne 0 ]]; then
+  echo "Exit status: $status"
+  exit 2
+fi
+exit 0
