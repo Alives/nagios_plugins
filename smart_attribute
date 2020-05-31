@@ -1,0 +1,55 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import optparse
+import subprocess
+import sys
+
+
+parser = optparse.OptionParser()
+parser.add_option('--attribute')
+parser.add_option('--disk')
+parser.add_option('--warn')
+parser.add_option('--crit')
+(options, _) = parser.parse_args()
+
+ret = {'OK': 0, 'WARNING': 1, 'CRITICAL': 2, 'UNKNWON': 3}
+status = 'UNKNOWN'
+msg = 'Attribute %s missing from output.' % options.attribute
+
+v_crit = int(options.crit)
+v_warn = int(options.warn)
+
+cmd = '/usr/bin/sudo /usr/sbin/smartctl -A'.split() + [options.disk]
+(stdout, stderr) = subprocess.Popen(cmd,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE).communicate()
+
+name = ''
+for line in stdout.splitlines():
+  ls = line.split()
+  if len(ls) < 1 or not ls[0].isdigit():
+    continue
+  if ls[0] == options.attribute:
+    _, name, _, value, worst, threshold, _, _, _, raw = ls
+    break
+
+if name:
+  status = 'OK'
+  value = int(value)
+  msg = ('%s %s: %s (worst: %s, threshold: %s, raw: %s)' %
+         (options.attribute, name, value, worst, threshold, raw))
+
+  if v_crit > v_warn:
+    if value >= v_crit:
+      status = 'CRITICAL'
+    elif value >= v_warn:
+      status = 'WARNING'
+  else:
+    if value <= v_crit:
+      status = 'CRITICAL'
+    elif value <= v_warn:
+      status = 'WARNING'
+
+print '%s: %s' % (status, msg)
+sys.exit(ret[status])
