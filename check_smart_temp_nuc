@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash
 if grep -q "$1.*/data" /proc/mounts; then
   flags="-d sat,12"
 else
