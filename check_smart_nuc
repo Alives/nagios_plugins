@@ -1,26 +1,55 @@
-#!/bin/bash
-if grep -q "$1.*/data" /proc/mounts; then
-  flags="-d sat,12"
-else
-  flags=""
-fi
-/usr/bin/sudo /usr/sbin/smartctl -H $1 $flags
-status=$?
-if [[ "${status}" -ne 0 ]]; then
-  echo -e "Exit status: $status\n"
-  mask=1
-  for i in {0..7}; do
-    echo "Bit $i: $(((status & mask) && 1))"
-    mask=$((mask << 1))
-  done
-  echo "0: Command line did not parse."
-  echo "1: Device open failed, device did not return an IDENTIFY DEVICE structure, or device is in a low-power mode (see '-n' option above)."
-  echo "2: Some SMART or other ATA command to the disk failed, or there was a checksum error in a SMART data structure (see '-b' option above)."
-  echo "3: SMART status check returned "DISK FAILING"."
-  echo "4: We found prefail Attributes <= threshold."
-  echo "5: SMART status check returned "DISK OK" but we found that some (usage or prefail) Attributes have been <= threshold at some time in the past."
-  echo "6: The device error log contains records of errors."
-  echo "7: The device self-test log contains records of errors.  [ATA only] Failed self-tests outdated by a newer successful extended self-test are ignored."
-  exit 2
-fi
-exit 0
+#!/usr/bin/python3
+
+import optparse
+import sys
+from subprocess import PIPE, Popen
+
+
+EXIT_MSGS = {
+    0: 'Command line did not parse.',
+    1: ('Device open failed, device did not return an IDENTIFY DEVICE '
+        'structure, or device is in a low-power mode (see \'-n\' option '
+        'above).'),
+    2: ('Some SMART or other ATA command to the disk failed, or there was a '
+        'checksum error in a SMART data structure (see \'-b\' option above).'),
+    3: 'SMART status check returned "DISK FAILING".',
+    4: 'We found prefail Attributes <= threshold.',
+    5: ('SMART status check returned "DISK OK" but we found that some (usage '
+        'or prefail) Attributes have been <= threshold at some time in the '
+        'past.'),
+    6: 'The device error log contains records of errors.',
+    7: ('The device self-test log contains records of errors.  [ATA only] '
+        'Failed self-tests outdated by a newer successful extended self-test '
+        'are ignored.'),
+}
+
+parser = optparse.OptionParser()
+parser.add_option('--device')
+parser.add_option('--ignore', default='')
+(args, _) = parser.parse_args()
+if not args.device:
+  parser.error('--device is required')
+
+ignored_bits = args.ignore.split(',')
+exit_status = 0
+flags = ''
+with open('/proc/mounts') as f:
+  for line in f:
+    if args.device in line and '/data' in line:
+      flags = ' -d sat,12'
+
+cmd = '/usr/bin/sudo /usr/sbin/smartctl -H %s%s' % (args.device, flags)
+c = Popen(cmd.split(), stdout=PIPE, stderr=PIPE, universal_newlines=True)
+print(c.communicate()[0])
+status = c.returncode
+
+if status:
+  print('Exit status: %d\n' % status)
+  mask = 1
+  for bit in range(0, 8):
+    if status & mask:
+      print('Bit %d: %s' % (bit, EXIT_MSGS[bit]))
+      if str(bit) not in ignored_bits:
+        exit_status = 2
+    mask <<= 1
+sys.exit(exit_status)
