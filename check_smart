@@ -33,22 +33,24 @@ if not args.device:
 ignored_bits = args.ignore.split(',')
 exit_status = 0
 flags = ''
-with open('/proc/mounts') as f:
-  for line in f:
-    if args.device in line and '/data' in line:
-      flags = ' -d sat,12'
+with open('/etc/hostname') as f:
+  if 'nuc' in f.read():
+    with open('/proc/mounts') as f:
+      for line in f:
+        if args.device in line and '/data' in line:
+          flags = ' -d sat,12'
 
-cmd = '/usr/bin/sudo /usr/sbin/smartctl -H %s%s' % (args.device, flags)
+cmd = f'/usr/bin/sudo /usr/sbin/smartctl -H {args.device}{flags}'
 c = Popen(cmd.split(), stdout=PIPE, stderr=PIPE, universal_newlines=True)
-print(c.communicate()[0])
+print(c.communicate()[0].strip().splitlines()[-1])
 status = c.returncode
 
 if status:
-  print('Exit status: %d\n' % status)
+  print(f'Exit status: {status}\n')
   mask = 1
   for bit in range(0, 8):
     if status & mask:
-      print('Bit %d: %s' % (bit, EXIT_MSGS[bit]))
+      print(f'Bit {bit}: {EXIT_MSGS[bit]}')
       if str(bit) not in ignored_bits:
         exit_status = 2
     mask <<= 1
