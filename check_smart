@@ -50,10 +50,10 @@ def check_attribute(attribute, disk):
          f'threshold: {thresh}, raw: {raw})')
   return (value, msg)
 
-def check_health(disk):
+def check_health(disk, ignore):
   status = 'CRITICAL'
   value = 'FAILED'
-  data = get_smart_data(disk, health=True)
+  data = get_smart_data(disk, ignore, health=True)
   result = data['smart_status']['passed']
   if result:
     status = 'OK'
@@ -77,7 +77,7 @@ def get_attribute(disk, attribute):
       return entry
   return {}
 
-def get_smart_data(disk, health=False):
+def get_smart_data(disk, ignore=[], health=False):
   op = '-A'
   if health:
     op = '-H'
@@ -89,6 +89,8 @@ def get_smart_data(disk, health=False):
       msg = ''
       mask = 1
       for bit in range(0, 8):
+        if str(bit) in ignore:
+          continue
         if return_code & mask:
           msg += f' Bit {bit}: {EXIT_MSGS[bit]}'
         mask <<= 1
@@ -115,9 +117,10 @@ def get_status(value, warn, crit):
 def main():
   parser = optparse.OptionParser()
   parser.add_option('--attribute', type='int')
-  parser.add_option('--health', action='store_true')
-  parser.add_option('--temp', action='store_true')
   parser.add_option('--disk')
+  parser.add_option('--health', action='store_true')
+  parser.add_option('--ignore', action='append', default=[])
+  parser.add_option('--temp', action='store_true')
   parser.add_option('--warn', type='float')
   parser.add_option('--crit', type='float')
   (args, _) = parser.parse_args()
@@ -135,7 +138,7 @@ def main():
     parser.error(error)
 
   if args.health:
-    return check_health(args.disk)
+    return check_health(args.disk, args.ignore)
   if args.attribute:
     value, msg = check_attribute(args.attribute, args.disk)
     if value == -1:
