@@ -1,57 +1,152 @@
 #!/usr/bin/python3
 
+import json
 import optparse
+import subprocess
 import sys
-from subprocess import PIPE, Popen
 
 
-EXIT_MSGS = {
-    0: 'Command line did not parse.',
-    1: ('Device open failed, device did not return an IDENTIFY DEVICE '
-        'structure, or device is in a low-power mode (see \'-n\' option '
-        'above).'),
-    2: ('Some SMART or other ATA command to the disk failed, or there was a '
-        'checksum error in a SMART data structure (see \'-b\' option above).'),
-    3: 'SMART status check returned "DISK FAILING".',
-    4: 'We found prefail Attributes <= threshold.',
-    5: ('SMART status check returned "DISK OK" but we found that some (usage '
-        'or prefail) Attributes have been <= threshold at some time in the '
-        'past.'),
-    6: 'The device error log contains records of errors.',
-    7: ('The device self-test log contains records of errors.  [ATA only] '
-        'Failed self-tests outdated by a newer successful extended self-test '
-        'are ignored.'),
+ATTRIBUTE_CHECK_FIELDS = {
+    22: 'raw',
+    177: 'current',
 }
+EXIT_MSGS = [
+    'Command line did not parse.',
+    ('Device open failed, device did not return an IDENTIFY DEVICE structure, '
+     'or device is in a low-power mode (see \'-n\' option above).'),
+    ('Some SMART or other ATA command to the disk failed, or there was a '
+     'checksum error in a SMART data structure (see \'-b\' option above).'),
+    'SMART status check returned "DISK FAILING".',
+    'We found prefail Attributes <= threshold.',
+    ('SMART status check returned "DISK OK" but we found that some (usage or '
+     'prefail) Attributes have been <= threshold at some time in the past.'),
+    'The device error log contains records of errors.',
+    ('The device self-test log contains records of errors. [ATA only] Failed se'
+     'lf-tests outdated by a newer successful extended self-test are ignored.')
+]
+RETURN_VALUES = {'OK': 0, 'WARNING': 1, 'CRITICAL': 2, 'UNKNOWN': 3}
 
-parser = optparse.OptionParser()
-parser.add_option('--device')
-parser.add_option('--ignore', default='')
-(args, _) = parser.parse_args()
-if not args.device:
-  parser.error('--device is required')
 
-ignored_bits = args.ignore.split(',')
-exit_status = 0
-flags = ''
-with open('/etc/hostname') as f:
-  if 'nuc' in f.read():
-    with open('/proc/mounts') as f:
-      for line in f:
-        if args.device in line and '/data' in line:
-          flags = ' -d sat,12'
+def get_correct_value(entry):
+  value = -1234
+  entry_id = entry['id']
+  if ATTRIBUTE_CHECK_FIELDS[entry_id] == 'current':
+    value = entry['value']
+  elif ATTRIBUTE_CHECK_FIELDS[entry_id] == 'raw':
+    value = entry['raw']['value']
+  return value
 
-cmd = f'/usr/bin/sudo /usr/sbin/smartctl -H {args.device}{flags}'
-c = Popen(cmd.split(), stdout=PIPE, stderr=PIPE, universal_newlines=True)
-print(c.communicate()[0].strip().splitlines()[-1])
-status = c.returncode
+def check_attribute(attribute, disk):
+  entry = get_attribute(disk, attribute=attribute)
+  if not entry:
+    return (-1, f'Attribute {attribute} missing from output.')
+  name = entry['name']
+  current = entry['value']
+  worst = entry['worst']
+  thresh = entry['thresh']
+  raw = entry['raw']['value']
+  value = get_correct_value(entry)
+  msg = (f'{attribute} {name}: {value} (current: {current}, worst: {worst}, '
+         f'threshold: {thresh}, raw: {raw})')
+  return (value, msg)
 
-if status:
-  print(f'Exit status: {status}\n')
-  mask = 1
-  for bit in range(0, 8):
-    if status & mask:
-      print(f'Bit {bit}: {EXIT_MSGS[bit]}')
-      if str(bit) not in ignored_bits:
-        exit_status = 2
-    mask <<= 1
-sys.exit(exit_status)
+def check_health(disk):
+  status = 'CRITICAL'
+  value = 'FAILED'
+  data = get_smart_data(disk, health=True)
+  result = data['smart_status']['passed']
+  if result:
+    status = 'OK'
+    value = 'PASSED'
+  msg = f'SMART overall-health self-assessment test {value}'
+  return (status, msg)
+
+def check_temp(disk):
+  to_f = lambda value: (1.8 * value) + 32
+  data = get_smart_data(disk)
+  if not data:
+    return ('UNKNOWN', 'No temperature attributes in SMART output.')
+  value = to_f(data['temperature']['current'])
+  msg = f'Temperature {disk}: {value:0.1f}°F'
+  return (value, msg)
+
+def get_attribute(disk, attribute):
+  data = get_smart_data(disk)
+  for entry in data['ata_smart_attributes']['table']:
+    if entry['id'] == attribute:
+      return entry
+  return {}
+
+def get_smart_data(disk, health=False):
+  op = '-A'
+  if health:
+    op = '-H'
+  return_code, out = subprocess.getstatusoutput(
+      f'/usr/sbin/smartctl --json {op} {disk}')
+  data = json.loads(out)
+  if return_code:
+    if health:
+      msg = ''
+      mask = 1
+      for bit in range(0, 8):
+        if return_code & mask:
+          msg += f' Bit {bit}: {EXIT_MSGS[bit]}'
+        mask <<= 1
+      print(f'ERROR:{msg}')
+      sys.exit(2)
+    print(f"UNKNOWN: {data['smartctl']['messages'][0]['string']}")
+    sys.exit(3)
+  return data
+
+def get_status(value, warn, crit):
+  val = float(value)
+  if crit > warn:
+    if val >= crit:
+      return 'CRITICAL'
+    elif val >= warn:
+      return 'WARNING'
+  else:
+    if val <= crit:
+      return 'CRITICAL'
+    elif val <= warn:
+      return 'WARNING'
+  return 'OK'
+
+def main():
+  parser = optparse.OptionParser()
+  parser.add_option('--attribute', type='int')
+  parser.add_option('--health', action='store_true')
+  parser.add_option('--temp', action='store_true')
+  parser.add_option('--disk')
+  parser.add_option('--warn', type='float')
+  parser.add_option('--crit', type='float')
+  (args, _) = parser.parse_args()
+  error = ''
+  if args.crit and args.warn and args.crit == args.warn:
+    error = '--warn and --crit should not be equal.'
+  if (args.attribute or args.temp) and not (args.warn and args.crit):
+    error = 'Provide --warn and --crit'
+  if not (args.attribute or args.health or args.temp):
+    error = 'Provide --attribute or --health or --temp.'
+  if not args.disk or not args.disk.startswith('/dev/'):
+    error = 'Provide --disk starting with /dev/'
+  if error:
+    parser.print_help()
+    parser.error(error)
+
+  if args.health:
+    return check_health(args.disk)
+  if args.attribute:
+    value, msg = check_attribute(args.attribute, args.disk)
+    if value == -1:
+      return ('UNKNOWN', msg)
+    return (get_status(value, args.warn, args.crit), msg)
+  if args.temp:
+    value, msg = check_temp(args.disk)
+    return (get_status(value, args.warn, args.crit), msg)
+  return ('UNKNOWN', 'Wrong arguments')
+
+if __name__ == '__main__':
+  (status, msg) = main()
+  print(f'{status}: {msg}')
+  sys.exit(RETURN_VALUES[status])
