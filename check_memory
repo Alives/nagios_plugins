@@ -4,8 +4,6 @@ import optparse
 import sys
 
 
-RETURN_VALUES = ['OK', 'WARNING', 'CRITICAL', 'UNKNOWN']
-
 
 def get_status(value, warn, crit):
   if value >= crit:
@@ -14,57 +12,63 @@ def get_status(value, warn, crit):
     return 1
   return 0
 
-def get_meminfo():
-  data = {'MemTotal': -1, 'MemAvailable': -1, 'SwapTotal': -1, 'SwapFree': -1}
+
+def get_meminfo(mode):
+  total = -1
+  avail = -1
+  if mode == 'MEMORY':
+    keys = ['MemTotal', 'MemAvailable']
+  elif mode == 'SWAP':
+    keys = ['SwapTotal', 'SwapFree']
   with open('/proc/meminfo') as f:
     for line in f.read().splitlines():
-      for k in data:
+      for k in keys:
         if line.startswith(f'{k}:'):
-          data[k] = int(line.split()[1])
+          val = int(line.split()[1]) >> 10
+          if 'total' in k.lower():
+            total = val
+          else:
+            avail = val
+          keys.remove(k)
           break
-      if all([v != -1 for v in data.values()]):
+      if all([v != -1 for v in [total, avail]]):
         break
-  return data
+  return (total, avail)
 
 
-def check_avail(warn, crit, total, avail):
+def check_avail(mode, warn, crit):
+  RETURN_VALUES = ['OK', 'WARNING', 'CRITICAL', 'UNKNOWN']
+  total, avail = get_meminfo(mode)
+  used = total - avail
   pct = 100 - int(round(avail / total * 100, 0))
   status = get_status(pct, warn, crit)
-  mb_total = total >> 10
-  mb_used = mb_total - (avail >> 10)
-  msg = (f'{RETURN_VALUES[status]} {pct}% used '
-         f'({mb_used} MB out of {mb_total} MB)')
+  msg = (f'{mode} {RETURN_VALUES[status]}: {pct}% used '
+         f'({used} MB out of {total} MB)')
   return (status, msg)
 
 
 def main():
+  if 'swap' in __file__.lower():
+    mode = 'SWAP'
+  else:
+    mode = 'MEMORY'
   parser = optparse.OptionParser()
-  parser.add_option('--memwarn', type='int', help='% free')
-  parser.add_option('--memcrit', type='int', help='% free')
-  parser.add_option('--swapwarn', type='int', help='% free')
-  parser.add_option('--swapcrit', type='int', help='% free')
+  parser.add_option('--warn', type='int', help='% free warning threshold')
+  parser.add_option('--crit', type='int', help='% free critical threshold')
   (args, _) = parser.parse_args()
   error = ''
-  if args.memcrit and args.memwarn and args.memcrit <= args.memwarn:
-    error = '--memwarn percentage should be more than --memcrit percentage.'
-  if args.swapcrit and args.swapwarn and args.swapcrit <= args.swapwarn:
-    error = '--swapwarn percentage should be more than --swapcrit percentage.'
-  if not (args.memcrit and args.memwarn and args.swapcrit and args.swapwarn):
-    error = 'Provide all args: --memwarn, --memcrit, --swapwarn, and --swapcrit'
+  if args.crit and args.warn and args.crit <= args.warn:
+    error = '--warn percentage should be more than --crit percentage.'
+  if not (args.crit and args.warn):
+    error = 'Provide both args: --warn and --crit'
   if error:
     parser.print_help()
     parser.error(error)
 
-  data = get_meminfo()
-  ram_status, ram_msg = check_avail(args.memwarn, args.memcrit,
-                                    data['MemTotal'], data['MemAvailable'])
-  swap_status, swap_msg = check_avail(args.swapwarn, args.swapcrit,
-                                      data['SwapTotal'], data['SwapFree'])
-  status = max(ram_status, swap_status)
-  msg = f'RAM {ram_msg} | SWAP {swap_msg}'
-  return (status, msg)
+  return check_avail(mode, args.warn, args.crit)
+
 
 if __name__ == '__main__':
   (status, msg) = main()
-  print(f'{RETURN_VALUES[status]}: {msg}')
+  print(msg)
   sys.exit(status)
