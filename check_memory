@@ -31,7 +31,7 @@ def check_avail(warn, crit, total, avail):
   pct = 100 - int(round(avail / total * 100, 0))
   status = get_status(pct, warn, crit)
   mb_total = total >> 10
-  mb_used = mb_total - avail >> 10
+  mb_used = mb_total - (avail >> 10)
   msg = (f'{RETURN_VALUES[status]} {pct}% used '
          f'({mb_used} MB out of {mb_total} MB)')
   return (status, msg)
