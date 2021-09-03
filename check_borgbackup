@@ -30,13 +30,13 @@ diff_time=$(printf "Last backup %02dh %02dm %02ds ago." ${h} ${m} ${s})
 
 if [ "${diff}" -gt "$((critical * 60 * 60))" ]; then
   # this cert is has already expired! return critical status.
-  printf "CRITICAL - No backup in over %s hours! %s\n" "$critical" "$diff_time"
+  printf "BACKUP CRITICAL: No backup in over %s hours! %s\n" "$critical" "$diff_time"
   exit 2
 elif [ "${diff}" -gt "$((warning * 60 * 60))" ]; then
   # this cert is expiring within the warning threshold. return warning status.
-  printf "WARNING - No backup in over %s hours! %s\n" "$warning" "$diff_time"
+  printf "BACKUP WARNING: No backup in over %s hours! %s\n" "$warning" "$diff_time"
   exit 1
 fi
 
-printf "OK - Backed up within the last %s hours. %s\n" "$warning" "$diff_time"
+printf "BACKUP OK: Backed up within the last %s hours. %s\n" "$warning" "$diff_time"
 exit 0

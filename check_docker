@@ -53,39 +53,40 @@ if [ $? -eq 0 ]; then
   fCountImages
   if [[ $OPTCONT -ne 0 ]]; then
     CONTAINER=$ARGCONT
+    CONTAINER_U=$(echo $CONTAINER | tr [:lower:] [:upper:])
     RUNNING=$(/usr/bin/docker -H $HOST inspect --format="{{ .State.Running }}" $CONTAINER 2> /dev/null)
     if [ $? -eq 1 ]; then
-      echo "CRITICAL - Container $CONTAINER does not exist."
+      echo "$CONTAINER_U CRITICAL: Container does not exist."
       exit 2
     fi
     if [ "$RUNNING" == "false" ]; then
-      echo "WARNING - Container $CONTAINER is not running."
+      echo "$CONTAINER_U WARNING: Container is not running."
       exit 1
     fi
     HEALTH=$(/usr/bin/docker -H $HOST inspect --format="{{ .State.Health.Status }}" $CONTAINER 2> /dev/null)
     if [ -z "$HEALTH" ]; then
       HEALTH="healthchecks are not implemented"
     elif [ "$HEALTH" != "healthy" ]; then
-      echo "WARNING - Container $CONTAINER is $HEALTH."
+      echo "$CONTAINER_U WARNING: Container is $HEALTH."
       exit 1
     fi
     STARTED=$(date --date="$(/usr/bin/docker -H $HOST inspect --format="{{ .State.StartedAt }}" $CONTAINER)")
     started_epoch=$(date --date="$STARTED" +%s)
     now=$(date +%s)
     if [[ "$started_epoch" -gt $((now-60)) ]]; then
-      echo "WARNING - Container $CONTAINER just restarted at $(date --date="$STARTED")"
+      echo "$CONTAINER_U WARNING: Container just restarted at $(date --date="$STARTED")"
       exit 1
     fi
     NETWORK=$(/usr/bin/docker -H $HOST inspect --format="{{ .NetworkSettings.IPAddress }}" $CONTAINER)
-    echo "OK - Container $CONTAINER is running and $HEALTH. | IP: $NETWORK, StartedAt: $STARTED"
+    echo "$CONTAINER_U OK: Container is running and $HEALTH, IP: $NETWORK, StartedAt: $STARTED"
     exit 0
   fi
-  echo "OK - Docker engine running. | containers=$nbContainers images=$nbImages"
+  echo "OK: Docker engine running, containers=$nbContainers images=$nbImages"
   exit 0
 elif [ $? -eq 1 ]; then
-  echo "CRITICAL - Docker engine not running."
+  echo "CRITICAL: Docker engine not running."
   exit 2
 else
-  echo "UNKNOW - Docker is in unknow state."
+  echo "UNKNOWN: Docker is in unknow state."
   exit 3
 fi

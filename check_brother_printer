@@ -43,13 +43,13 @@ output = ', '.join(s)
 lookup = lambda x: int(data[FIELDS[x][0]])
 if (int(args.drum_crit) >= lookup('Drum') or
     int(args.toner_crit) >= lookup('Toner')):
-  output = f'CRITICAL: {output}'
+  output = f'PRINTER CRITICAL: {output}'
   exit_status = 2
 elif (int(args.drum_warn) >= lookup('Drum') or
     int(args.toner_warn) >= lookup('Toner')):
-  output = f'WARNING: {output}'
+  output = f'PRINTER WARNING: {output}'
   exit_status = 1
 else:
-  output = f'OK: {output}'
+  output = f'PRINTER OK: {output}'
 print(output)
 sys.exit(exit_status)

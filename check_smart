@@ -24,7 +24,7 @@ EXIT_MSGS = [
     ('The device self-test log contains records of errors. [ATA only] Failed se'
      'lf-tests outdated by a newer successful extended self-test are ignored.')
 ]
-RETURN_VALUES = {'OK': 0, 'WARNING': 1, 'CRITICAL': 2, 'UNKNOWN': 3}
+RETURN_VALUES = ['OK', 'WARNING', 'CRITICAL', 'UNKNOWN']
 
 
 def get_correct_value(entry):
@@ -51,12 +51,12 @@ def check_attribute(attribute, disk):
   return (value, msg)
 
 def check_health(disk):
-  status = 'CRITICAL'
+  status = 2
   value = 'FAILED'
   data = get_smart_data(disk, health=True)
   result = data['smart_status']['passed']
   if result:
-    status = 'OK'
+    status = 0
     value = 'PASSED'
   msg = f'SMART overall-health self-assessment test {value}'
   return (status, msg)
@@ -92,9 +92,9 @@ def get_smart_data(disk, health=False):
         if return_code & mask:
           msg += f' Bit {bit}: {EXIT_MSGS[bit]}'
         mask <<= 1
-      print(f'ERROR:{msg}')
+      print(f'SMART HEALTH CRITICAL: {msg}')
       sys.exit(2)
-    print(f"UNKNOWN: {data['smartctl']['messages'][0]['string']}")
+    print(f"SMART UNKNOWN: {data['smartctl']['messages'][0]['string']}")
     sys.exit(3)
   return data
 
@@ -102,15 +102,15 @@ def get_status(value, warn, crit):
   val = float(value)
   if crit > warn:
     if val >= crit:
-      return 'CRITICAL'
+      return 2
     elif val >= warn:
-      return 'WARNING'
+      return 1
   else:
     if val <= crit:
-      return 'CRITICAL'
+      return 2
     elif val <= warn:
-      return 'WARNING'
-  return 'OK'
+      return 1
+  return 0
 
 def main():
   parser = optparse.OptionParser()
@@ -139,14 +139,14 @@ def main():
   if args.attribute:
     value, msg = check_attribute(args.attribute, args.disk)
     if value == -1:
-      return ('UNKNOWN', msg)
+      return (3, msg)
     return (get_status(value, args.warn, args.crit), msg)
   if args.temp:
     value, msg = check_temp(args.disk)
     return (get_status(value, args.warn, args.crit), msg)
-  return ('UNKNOWN', 'Wrong arguments')
+  return (3, 'Wrong arguments')
 
 if __name__ == '__main__':
   (status, msg) = main()
-  print(f'{status}: {msg}')
-  sys.exit(RETURN_VALUES[status])
+  print(f'{RETURN_VALUES[status]}: {msg}')
+  sys.exit(status)
