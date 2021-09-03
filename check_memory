@@ -1,0 +1,70 @@
+#!/usr/bin/python3
+
+import optparse
+import sys
+
+
+RETURN_VALUES = ['OK', 'WARNING', 'CRITICAL', 'UNKNOWN']
+
+
+def get_status(value, warn, crit):
+  if value >= crit:
+    return 2
+  elif value >= warn:
+    return 1
+  return 0
+
+def get_meminfo():
+  data = {'MemTotal': -1, 'MemAvailable': -1, 'SwapTotal': -1, 'SwapFree': -1}
+  with open('/proc/meminfo') as f:
+    for line in f.read().splitlines():
+      for k in data:
+        if line.startswith(f'{k}:'):
+          data[k] = int(line.split()[1])
+          break
+      if all([v != -1 for v in data.values()]):
+        break
+  return data
+
+
+def check_avail(warn, crit, total, avail):
+  pct = 100 - int(round(avail / total * 100, 0))
+  status = get_status(pct, warn, crit)
+  mb_total = total >> 10
+  mb_used = mb_total - avail >> 10
+  msg = (f'{RETURN_VALUES[status]} {pct}% used '
+         f'({mb_used} MB out of {mb_total} MB)')
+  return (status, msg)
+
+
+def main():
+  parser = optparse.OptionParser()
+  parser.add_option('--memwarn', type='int', help='% free')
+  parser.add_option('--memcrit', type='int', help='% free')
+  parser.add_option('--swapwarn', type='int', help='% free')
+  parser.add_option('--swapcrit', type='int', help='% free')
+  (args, _) = parser.parse_args()
+  error = ''
+  if args.memcrit and args.memwarn and args.memcrit <= args.memwarn:
+    error = '--memwarn percentage should be more than --memcrit percentage.'
+  if args.swapcrit and args.swapwarn and args.swapcrit <= args.swapwarn:
+    error = '--swapwarn percentage should be more than --swapcrit percentage.'
+  if not (args.memcrit and args.memwarn and args.swapcrit and args.swapwarn):
+    error = 'Provide all args: --memwarn, --memcrit, --swapwarn, and --swapcrit'
+  if error:
+    parser.print_help()
+    parser.error(error)
+
+  data = get_meminfo()
+  ram_status, ram_msg = check_avail(args.memwarn, args.memcrit,
+                                    data['MemTotal'], data['MemAvailable'])
+  swap_status, swap_msg = check_avail(args.swapwarn, args.swapcrit,
+                                      data['SwapTotal'], data['SwapFree'])
+  status = max(ram_status, swap_status)
+  msg = f'RAM {ram_msg} | SWAP {swap_msg}'
+  return (status, msg)
+
+if __name__ == '__main__':
+  (status, msg) = main()
+  print(f'{RETURN_VALUES[status]}: {msg}')
+  sys.exit(status)
