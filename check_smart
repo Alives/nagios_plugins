@@ -28,7 +28,7 @@ RETURN_VALUES = ['OK', 'WARNING', 'CRITICAL', 'UNKNOWN']
 
 
 def get_correct_value(entry):
-  value = -1234
+  value = 3
   entry_id = entry['id']
   if ATTRIBUTE_CHECK_FIELDS[entry_id] == 'current':
     value = entry['value']
@@ -37,9 +37,16 @@ def get_correct_value(entry):
   return value
 
 def check_attribute(attribute, disk):
-  entry = get_attribute(disk, attribute=attribute)
+  entry = {}
+  data = get_smart_data(disk)
+  if data['device']['protocol'].lower() != 'ata':
+    return (3, 'Attributes only supported on ATA disks')
+  for i in data['ata_smart_attributes']['table']:
+    if i['id'] == attribute:
+      entry = i
+      break
   if not entry:
-    return (-1, f'Attribute {attribute} missing from output.')
+    return (3, f'Attribute {attribute} missing from output.')
   name = entry['name']
   current = entry['value']
   worst = entry['worst']
@@ -61,6 +68,14 @@ def check_health(disk):
   msg = f'SMART overall-health self-assessment test {value}'
   return (status, msg)
 
+def check_information(information, disk):
+  data = get_smart_data(disk)
+  if data['device']['protocol'].lower() != 'nvme':
+    return (3, 'Information only supported on NVMe disks')
+  value = data['nvme_smart_health_information_log'][information]
+  msg = f'{information.replace("_", " ").title()}: {value}'
+  return (value, msg)
+
 def check_temp(disk):
   to_f = lambda value: (1.8 * value) + 32
   data = get_smart_data(disk)
@@ -69,13 +84,6 @@ def check_temp(disk):
   value = to_f(data['temperature']['current'])
   msg = f'Temperature {disk}: {value:0.1f}°F'
   return (value, msg)
-
-def get_attribute(disk, attribute):
-  data = get_smart_data(disk)
-  for entry in data['ata_smart_attributes']['table']:
-    if entry['id'] == attribute:
-      return entry
-  return {}
 
 def get_smart_data(disk, health=False):
   op = '-A'
@@ -117,6 +125,7 @@ def main():
   parser.add_option('--attribute', type='int')
   parser.add_option('--disk')
   parser.add_option('--health', action='store_true')
+  parser.add_option('--information', type='str')
   parser.add_option('--temp', action='store_true')
   parser.add_option('--warn', type='float')
   parser.add_option('--crit', type='float')
@@ -124,10 +133,11 @@ def main():
   error = ''
   if args.crit and args.warn and args.crit == args.warn:
     error = '--warn and --crit should not be equal.'
-  if (args.attribute or args.temp) and not (args.warn and args.crit):
+  if (any([args.attribute, args.information, args.temp]) and not
+      (args.warn and args.crit)):
     error = 'Provide --warn and --crit'
-  if not (args.attribute or args.health or args.temp):
-    error = 'Provide --attribute or --health or --temp.'
+  if not any([args.attribute, args.health, args.information, args.temp]):
+    error = 'Provide --attribute, --health, --information, or --temp.'
   if not args.disk or not args.disk.startswith('/dev/'):
     error = 'Provide --disk starting with /dev/'
   if error:
@@ -138,13 +148,13 @@ def main():
     return check_health(args.disk)
   if args.attribute:
     value, msg = check_attribute(args.attribute, args.disk)
-    if value == -1:
-      return (3, msg)
-    return (get_status(value, args.warn, args.crit), msg)
-  if args.temp:
+  elif args.information:
+    value, msg = check_information(args.information, args.disk)
+  elif args.temp:
     value, msg = check_temp(args.disk)
-    return (get_status(value, args.warn, args.crit), msg)
-  return (3, 'Wrong arguments')
+  else:
+    return (3, 'Wrong arguments')
+  return (get_status(value, args.warn, args.crit), msg)
 
 if __name__ == '__main__':
   (status, msg) = main()
