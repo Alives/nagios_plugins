@@ -1,0 +1,17 @@
+#!/bin/bash
+
+dev="${1}"
+ip="${2}"
+
+if [[ -z "${dev}" ]] || [[ -z "${ip}" ]]; then
+  echo "Usage: ${0} \${dev} \${ip}"
+  exit 2
+fi
+
+if ip="$(ip address show "${dev}" | grep -o "\(inet ${ip}.*\)")"; then
+  echo "MASTER   ${ip}"
+  exit 0
+else
+  echo "BACKUP"
+  exit 1
+fi
