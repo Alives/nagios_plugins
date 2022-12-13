@@ -1,17 +1,31 @@
 #!/bin/bash
 
-dev="${1}"
-ip="${2}"
+declare -g dev="${1}"
+declare -g ip="${2}"
 
 if [[ -z "${dev}" ]] || [[ -z "${ip}" ]]; then
   echo "Usage: ${0} \${dev} \${ip}"
   exit 2
 fi
 
-if ip="$(ip address show "${dev}" | grep -o "\(inet ${ip}.*\)")"; then
-  echo "MASTER   ${ip}"
+function get_status() {
+  kill -SIGUSR1 \
+    "$(/usr/bin/sleep 0.5 && \
+       /usr/bin/pgrep -f "/usr/sbin/ucarp.*${dev}.*${ip}")" &
+
+  tail -F -n 0 /var/log/syslog | while read -r line; do
+    status="$(echo "${line}" | grep 'ucarp.*INFO')"
+    if [[ -n "${status}" ]]; then
+      echo "${status}"
+      break
+    fi
+  done
+}
+
+status="$(get_status)"
+
+if echo "${status}" | grep 'MASTER'; then
   exit 0
 else
-  echo "BACKUP"
   exit 1
 fi
