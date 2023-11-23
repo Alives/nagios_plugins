@@ -1,0 +1,41 @@
+#!/usr/bin/python3
+
+import argparse
+import sys
+import requests
+
+
+PORT = 8080
+URI = '/sabnzbd/api'
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-a', '--apikey', required=True)
+parser.add_argument('--host', default='127.0.0.1')
+args = parser.parse_args()
+
+url = f'http://{args.host}:{PORT}{URI}'
+payload = {
+    'apikey': args.apikey,
+    'mode': 'fullstatus',
+    'output': 'json',
+}
+status = requests.get(url, params=payload).json()['status']
+
+exit_status = 0
+msg = 'OK'
+for message in status['warnings']:
+  msg = message['text']
+  if not exit_status and message['type'] == 'WARNING':
+    exit_status = 1
+  if message['type'] == 'ERROR':
+    exit_status = 2
+  else:
+    exit_status = 3
+
+if not exit_status and status['paused']:
+  exit_status = 1
+  msg = 'Paused'
+
+print(msg)
+sys.exit(exit_status)
