@@ -1,0 +1,52 @@
+#!python3
+
+import requests
+import socket
+import sys
+import argparse
+
+
+URL = 'https://www.cloudflare.com/cdn-cgi/trace'
+
+
+def get_ip_from_hostname(hostname):
+  try:
+    return socket.gethostbyname(hostname)
+  except socket.gaierror:
+    print(f'Unable to resolve domain: {hostname}')
+    sys.exit(3)
+
+
+parser = argparse.ArgumentParser(
+  description='Compare the public IP with the DNS IP of a hostname.'
+)
+parser.add_argument('hostname', nargs=1,
+                    help='The hostname to compare against the Cloudflare IP.')
+args = parser.parse_args()
+hostname = args.hostname[0]
+
+# Get public IP from Cloudflare
+try:
+  r = requests.get(URL)
+  r.raise_for_status()  # Ensure request was successful
+  public_ip = None
+  for line in r.text.splitlines():
+    if line.startswith('ip='):
+      public_ip = line.split('=')[-1]
+      break
+  if not public_ip:
+    print('Unable to extract IP from Cloudflare response.')
+    sys.exit(3)
+except Exception as e:
+    print(f'Error occurred: {str(e)}')
+    sys.exit(3)
+
+hostname_ip = get_ip_from_hostname(hostname)
+
+if public_ip == hostname_ip:
+  print(f'{hostname} IP addresses match: {public_ip}')
+  sys.exit(0)
+
+print(f'{args.hostname} IP addresses do not match. Cloudflare IP: {public_ip}, '
+      f'Hostname IP: {hostname_ip}')
+sys.exit(2)
