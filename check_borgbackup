@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 warning=24
 critical=72
 
@@ -23,9 +23,9 @@ lastBackupDate=$(date -d "${lastBackupDateString}" "+%s" )
 
 diff=$((currentDate - lastBackupDate))
 
-((h=diff/3600))
-((m=(diff%3600)/60))
-((s=diff%60))
+h=$((diff/3600))
+m=$(((diff%3600)/60))
+s=$((diff%60))
 diff_time=$(printf "Last backup %02dh %02dm %02ds ago." ${h} ${m} ${s})
 
 if [ "${diff}" -gt "$((critical * 60 * 60))" ]; then
