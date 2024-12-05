@@ -14,12 +14,17 @@ done
 
 # check to see if the statusfile exists
 if ! [ -r "$statusfile" ]; then
-  printf "CRITICAL - the borgbackup statusfile you pointed to does not exist! - %s\n" "$statusfile"
+  echo -n 'CRITICAL: The borgbackup statusfile you pointed to does not exist!'
+  echo "- ${statusfile}"
   exit 2
 fi
 
-lastBackupDateString=$(grep 'Time (end):' "$statusfile" | sed -e 's/Time (end):\s\+//g')
-lastBackupDate=$(date -d "${lastBackupDateString}" "+%s" )
+lastBackupDateString=$(grep -m1 'Time (end):' "$statusfile" | \
+                       sed -e 's/Time (end):\s\+//g')
+if ! lastBackupDate=$(date -d "${lastBackupDateString}" "+%s" 2>&1); then
+  echo "UNKNOWN: ${lastBackupDate}"
+  exit 3
+fi
 
 diff=$((currentDate - lastBackupDate))
 
