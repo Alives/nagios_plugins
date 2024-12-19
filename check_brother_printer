@@ -2,17 +2,27 @@
 
 import argparse
 import requests
+import re
 import sys
 import traceback
 
 
-def main():
-  FIELDS = {
-      'Toner': ('% of Life Remaining(Toner)', '%'),
-      'Drum': ('% of Life Remaining(Drum Unit)', '%'),
-      'Page Counter': ('Page Counter', ''),
-  }
+REGEXES = {
+    'drum': r'Drum&#32;Unit\*.*?<dd>(\d+?)%</dd>',
+    'page_counter': r'<dt>Page&#32;Counter</dt><dd>(\d+?)</dd>',
+    'toner': r'Toner\*\*.*?<dd>(\d+?)%</dd>',
+}
 
+
+def lookup(key, html):
+  match = re.search(REGEXES[key], html)
+  if not match:
+    print(f'UNKNOWN: {key}: {url} source does not match for {REGEXES[key]}.')
+    sys.exit(3)
+  return int(match.group(1))
+
+
+def main():
   exit_status = 0
 
   parser = argparse.ArgumentParser()
@@ -30,27 +40,23 @@ def main():
   elif not args.drum_crit or not args.toner_crit:
     parser.error('Must specify critical levels.')
 
-  csv = requests.get(f'http://{args.host}/etc/mnt_info.csv').text.rstrip()
-  csv = csv.replace('"', '')
-  k, v = [x.split(',') for x in csv.split('\n')]
-  data = dict(zip(k, v))
-
-  s = []
-  for name, (key, unit) in FIELDS.items():
-    s.append(f'{name}: {data[key]}{unit}')
-  output = ', '.join(s)
-
-  lookup = lambda x: int(data[FIELDS[x][0]])
-  if (int(args.drum_crit) >= lookup('Drum') or
-      int(args.toner_crit) >= lookup('Toner')):
-    output = f'PRINTER CRITICAL: {output}'
+  url = f'http://{args.host}/general/information.html'
+  html = requests.get(url).text
+  drum = lookup('drum', html)
+  toner = lookup('toner', html)
+  page_counter = lookup('page_counter', html)
+  output = f'Drum: {drum}%, Toner: {toner}%, '
+  output += f'Page counter: {lookup("page_counter", html)}.'
+  if (int(args.drum_crit) >= drum or
+      int(args.toner_crit) >= toner):
+    output = f'CRITICAL: {output}'
     exit_status = 2
-  elif (int(args.drum_warn) >= lookup('Drum') or
-      int(args.toner_warn) >= lookup('Toner')):
-    output = f'PRINTER WARNING: {output}'
+  elif (int(args.drum_warn) >= drum or
+      int(args.toner_warn) >= toner):
+    output = f'WARNING: {output}'
     exit_status = 1
   else:
-    output = f'PRINTER OK: {output}'
+    output = f'OK: {output}'
   print(output)
   return exit_status
 
