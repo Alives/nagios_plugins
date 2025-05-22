@@ -5,16 +5,17 @@ import sys
 import requests
 
 
-PORT = 8080
 URI = '/sabnzbd/api'
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-a', '--apikey', required=True)
 parser.add_argument('--host', default='127.0.0.1')
+parser.add_argument('--port', default='8080')
+parser.add_argument('--scheme', default='http')
 args = parser.parse_args()
 
-url = f'http://{args.host}:{PORT}{URI}'
+url = f'{args.scheme}://{args.host}:{args.port}{URI}'
 payload = {
     'apikey': args.apikey,
     'mode': 'fullstatus',
